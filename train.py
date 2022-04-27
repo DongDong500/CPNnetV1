@@ -236,7 +236,18 @@ def train(devices=None, opts=None, REPORT=None):
     ''' (2-1) Resume model
     '''
     if opts.ckpt is not None and os.path.isfile(opts.ckpt):
-        raise NotImplementedError
+        checkpoint = torch.load(opts.ckpt, map_location=torch.device('cpu'))
+        model.load_state_dict(checkpoint["model_state"])
+        model = nn.DataParallel(model)
+        model.to(devices)
+        if opts.continue_training:
+            optimizer.load_state_dict(checkpoint["optimizer_state"])
+            scheduler.load_state_dict(checkpoint["scheduler_state"])
+            cur_itrs = checkpoint["cur_itrs"]
+            best_score = checkpoint['best_score']
+            print("Training state restored from %s" % opts.ckpt)
+        print("Model restored from %s" % opts.ckpt)
+        del checkpoint  # free memory
     else:
         print("Train from scratch...")
         resume_epoch = 0
@@ -319,7 +330,7 @@ def train(devices=None, opts=None, REPORT=None):
         running_loss = 0.0
         metrics.reset()
 
-        for (images, lbl) in tqdm(train_loader):
+        for (images, lbl) in tqdm(train_loader, leave=True):
 
             images = images.to(devices)
             lbl = lbl.to(devices)
