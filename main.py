@@ -105,9 +105,9 @@ def smail(subject: str = 'default subject', body: dict = {}):
     ''' send short report mail (smtp) 
     '''
     to_addr = ['sdimivy014@korea.ac.kr']
-    from_addr = []
+    from_addr = ['donotreply@korea.ac.kr']
 
-    ms = MailSend(subject=subject, msg=body)
+    ms = MailSend(subject=subject, msg=body, to_addr=to_addr, from_addr=from_addr)
     ms()
 
 
@@ -132,6 +132,10 @@ if __name__ == '__main__':
                 'output_stride_choice' : 0,
                 'current_working_dir' : 0
                 }
+    I = jog['loss_choice']
+    J = jog['model_choice']
+    K = jog['output_stride_choice']
+
     if os.path.exists(os.path.join(opts.default_path, 'mlog.json')):
         with open(os.path.join(opts.default_path, 'mlog.json'), "r") as f:
             mlog = json.load(f)
@@ -144,21 +148,30 @@ if __name__ == '__main__':
                                 'ap_cross_entropy', 'cross_entropy', 'focal_loss']
         model_choice = ['deeplabv3plus_resnet101', 'deeplabv3plus_resnet50']
         output_stride_choice = [8, 16, 32, 64]
-        for i in range(jog['loss_choice'], len(loss_choice)):   
+
+        for i in range(len(loss_choice)):
+            if i < I:
+                continue  
             mid_time = datetime.now()
-            for j in range(jog['model_choice'], len(model_choice)):
-                for k in range(jog['output_stride_choice'], len(output_stride_choice)):
+            for j in range(len(model_choice)):
+                if j < J:
+                    continue
+                for k in range(len(output_stride_choice)):
+                    if k < K:
+                        continue
                     opts.Tlog_dir = opts.default_path
                     opts.loss_type = loss_choice[i]
                     opts.model = model_choice[j]
                     opts.output_stride = output_stride_choice[k]
+                    print("i: {}, j: {}, k: {}".format(i, j, k))
 
                     if resume:
                         resume = False
                         logdir = jog['current_working_dir']
                         opts.current_time = "resume"
+                        opts.ckpt = logdir
                     else:
-                        opts.current_time = datetime.now().strftime('%b%d_%H-%M-%S')                    
+                        opts.current_time = datetime.now().strftime('%b%d_%H-%M-%S')
                         logdir = os.path.join(opts.Tlog_dir, opts.model, opts.current_time + '_' + opts.dataset)
 
                     # leave log
@@ -170,17 +183,25 @@ if __name__ == '__main__':
                         json.dump(jog, f, indent=2)
 
                     start_time = datetime.now()
-                    key = i*len(model_choice)*len(output_stride_choice) + j*len(output_stride_choice) + k
-                    mlog[key] = {"Model" : model_choice[j], "F1-0" : 0.9, "F1-1" : 0.1}
+                    key = str(i*len(model_choice)*len(output_stride_choice) + j*len(output_stride_choice) + k)
+                    ''' 
+                        Ex) {"Model" : model_choice[j], "F1-0" : "0.9", "F1-1" : "0.1"}
+                    '''
+                    mlog[key] = {"Model" : model_choice[j], "F1-0" : "0.9", "F1-1" : "0.1"}
                     #mlog[key] = train(devices=device, opts=opts, REPORT=ms)
-                    with open(os.path.join(opts.default_path, 'mlog.json'), "w") as f:
-                        json.dum(mlog, f, indent=2)
+                    time.sleep(5)
                     time_elapsed = datetime.now() - start_time
+
+                    with open(os.path.join(opts.default_path, 'mlog.json'), "w") as f:
+                        ''' JSON treats keys as strings
+                        '''
+                        json.dump(mlog, f, indent=2)
+                    
                     if os.path.exists(os.path.join(logdir, 'summary.txt')):
                         with open(os.path.join(logdir, 'summary.txt'), 'a') as f:
                             f.write('Time elapsed (h:m:s) {}'.format(time_elapsed))
 
-            mlog['time elapsed'] = 'Time elapsed (h:m:s.ms) {}'.format((datetime.now() - mid_time).strftime('%d day %H-%M-%S'))
+            mlog['time elapsed'] = 'Time elapsed (h:m:s.ms) {}'.format(datetime.now() - mid_time)
             smail(subject="Short report-{}".format(loss_choice[i]), body=mlog)
             mlog = {}
             os.remove(os.path.join(opts.default_path, 'mlog.json'))
