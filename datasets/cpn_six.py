@@ -6,6 +6,7 @@ import torch.utils.data as data
 import shutil
 import numpy as np
 
+from collections import namedtuple
 from PIL import Image
 #from .splits import split_dataset
 '''
@@ -17,6 +18,27 @@ else:
     print(os.path.dirname( os.path.dirname( os.path.abspath(__file__) ) ))
     from .splits import split_dataset
 '''
+
+def cpn_cmap(N=256, normalized=False):
+    def bitget(byteval, idx):
+        return ((byteval & (1 << idx)) != 0)
+
+    dtype = 'float32' if normalized else 'uint8'
+    cmap = np.zeros((N, 3), dtype=dtype)
+    for i in range(N):
+        r = g = b = 0
+        c = i
+        for j in range(8):
+            r = r | (bitget(c, 0) << 7-j)
+            g = g | (bitget(c, 1) << 7-j)
+            b = b | (bitget(c, 2) << 7-j)
+            c = c >> 3
+
+        cmap[i] = np.array([r, g, b])
+
+    cmap = cmap/255 if normalized else cmap
+    return cmap
+
 CpnDataDir = 'CPN_all'
 
 class CPN(data.Dataset):
@@ -28,6 +50,20 @@ class CPN(data.Dataset):
         transform (callable, optional): A function/transform that  takes in an PIL image
             and returns a transformed version. E.g, ``transforms.RandomCrop``
     """
+    
+    CpnSixClass = namedtuple('CpnSixClass', ['name', 'id', 'train_id', 'category', 'category_id',
+                                                'has_instances', 'ignore_in_eval', 'color'])
+    classes = [
+        CpnSixClass('background', 0, 0, 'void', 0, False, True, (0, 0, 0)),
+        CpnSixClass('nerve', 1, 1, 'void', 0, False, True, (0, 0, 255))
+    ]
+
+    train_id_to_color = [c.color for c in classes if (c.train_id != -1 and c.train_id != 255)]
+    train_id_to_color.append([0, 0, 0])
+    train_id_to_color = np.array(train_id_to_color)
+    id_to_train_id = np.array([c.train_id for c in classes])
+    
+    cmap = cpn_cmap()
 
     def __init__(self, root, datatype='CPN_six', image_set='train', transform=None, is_rgb=True):
         
