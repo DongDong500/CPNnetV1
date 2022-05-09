@@ -49,9 +49,9 @@ def build_log(opts, LOGDIR) -> SummaryWriter:
         os.mkdir(logdir)
         opts.save_ckpt = logdir
     # Checkpoint option
-    if opts.ckpt == None:
-        logdir = os.path.join(LOGDIR, 'ckpt')
-        os.mkdir(logdir)
+    #if opts.ckpt == None:
+    #    logdir = os.path.join(LOGDIR, 'ckpt')
+    #    os.mkdir(logdir)
 
     # Save Options description
     with open(os.path.join(LOGDIR, 'summary.txt'), 'w') as f:
@@ -98,6 +98,13 @@ def get_dataset(opts):
         val_dst = dt.CPNALLSegmentation(root=opts.data_root, datatype=opts.dataset,
                                         image_set='val', transform=val_transform, 
                                         is_rgb=opts.is_rgb)
+    elif opts.dataset == "Median":
+        train_dst = dt.Median(root=opts.data_root, datatype=opts.dataset, 
+                            image_set='train', transform=train_transform,
+                            is_rgb=opts.is_rgb)
+        val_dst = dt.Median(root=opts.data_root, datatype=opts.dataset,
+                        image_set='val', transform=val_transform,
+                        is_rgb=opts.is_rgb)
     else:
         train_dst = dt.CPN(root=opts.data_root, datatype=opts.dataset, 
                             image_set='train', transform=train_transform,
@@ -143,7 +150,7 @@ def validate(opts, model, loader, device, metrics, epoch, criterion):
             running_loss += loss.item() * images.size(0)
 
         if opts.save_val_results:
-            sdir = os.path.join(opts.save_val_dir, 'epoch_{}'.format(epoch))
+            sdir = os.path.join(opts.val_results_dir, 'epoch_{}'.format(epoch))
             utils.save(sdir, model, loader, device, opts.is_rgb)
 
     epoch_loss = running_loss / len(loader.dataset)
@@ -152,7 +159,7 @@ def validate(opts, model, loader, device, metrics, epoch, criterion):
     return score, epoch_loss
 
 
-def train(opts, devices, REPORT, LOGDIR) -> dict:
+def train(opts, devices, LOGDIR) -> dict:
 
     writer = build_log(opts, LOGDIR)
     
@@ -347,20 +354,9 @@ def train(opts, devices, REPORT, LOGDIR) -> dict:
         if early_stopping.early_stop:
             print("Early Stop !!!")
             break
-        
+
         if opts.run_demo and epoch > 3:
             break
-
-    tmp = []
-    tmp.append("Model: {}, Datasets: {}".format(opts.model, opts.dataset))
-    tmp.append("loss: {}, policy: {} lr: {}, os: {}".format(opts.loss_type, opts.lr_policy, 
-                                                                opts.lr, opts.output_stride))
-    tmp.append("Epoch [{}]".format(B_epoch))
-    tmp.append("F1 \t\t [0]: {:.2f} [1]: {:.2f}".format(B_val_score['Class F1'][0], 
-                                                            B_val_score['Class F1'][1]))
-    tmp.append("Class IoU \t [0]: {:.2f} [1]: {:.2f}".format(B_val_score['Class IoU'][0], 
-                                                                B_val_score['Class IoU'][1]))
-    REPORT.append_msg(tmp)
 
     if opts.save_last_results:
         with open(os.path.join(LOGDIR, 'summary.txt'), 'a') as f:
@@ -369,14 +365,23 @@ def train(opts, devices, REPORT, LOGDIR) -> dict:
 
         if opts.save_model:
             model.load_state_dict(torch.load(os.path.join(opts.save_ckpt, 'dicecheckpoint.pt')))
-            save_val_image(opts, model, val_loader, devices, B_epoch)
+            sdir = os.path.join(opts.val_results_dir, 'epoch_{}'.format(B_epoch))
+            utils.save(sdir, model, val_loader, devices, opts.is_rgb)
+
             if os.path.exists(os.path.join(opts.save_ckpt, 'dicecheckpoint.pt')):
                 os.remove(os.path.join(opts.save_ckpt, 'dicecheckpoint.pt'))
         else:
             model.load_state_dict(torch.load(os.path.join(opts.save_ckpt, 'dicecheckpoint.pt')))
-            save_val_image(opts, model, val_loader, devices, B_epoch)
+            sdir = os.path.join(opts.val_results_dir, 'epoch_{}'.format(B_epoch))
+            utils.save(sdir, model, val_loader, devices, opts.is_rgb)
             if os.path.exists(os.path.join(opts.save_ckpt, 'checkpoint.pt')):
                 os.remove(os.path.join(opts.save_ckpt, 'checkpoint.pt'))
             if os.path.exists(os.path.join(opts.save_ckpt, 'dicecheckpoint.pt')):
                 os.remove(os.path.join(opts.save_ckpt, 'dicecheckpoint.pt'))
-            os.rmdir(os.path.join(opts.save_ckpt))  
+            os.rmdir(os.path.join(opts.save_ckpt))
+
+    return {
+            'Model' : opts.model, 'Dataset' : opts.dataset,
+            'Policy' : opts.lr_policy, 'OS' : opts.output_stride, 'Epoch' : str(B_epoch),
+            'F1 [0]' : "{:.2f}".format(B_val_score['Class F1'][0]), 'F1 [1]' : "{:.2f}".format(B_val_score['Class F1'][1])
+            }

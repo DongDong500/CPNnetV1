@@ -144,8 +144,7 @@ if __name__ == '__main__':
 
     total_time = datetime.now()
     try:
-        loss_choice = ['dice_loss', 'ap_entropy_dice_loss', 'entropy_dice_loss', 
-                                'ap_cross_entropy', 'cross_entropy', 'focal_loss']
+        loss_choice = ['dice_loss', 'ap_entropy_dice_loss', 'ap_cross_entropy', 'focal_loss']
         model_choice = ['deeplabv3plus_resnet101', 'deeplabv3plus_resnet50']
         output_stride_choice = [8, 16, 32, 64]
 
@@ -187,9 +186,9 @@ if __name__ == '__main__':
                     ''' 
                         Ex) {"Model" : model_choice[j], "F1-0" : "0.9", "F1-1" : "0.1"}
                     '''
-                    mlog[key] = {"Model" : model_choice[j], "F1-0" : "0.9", "F1-1" : "0.1"}
-                    #mlog[key] = train(devices=device, opts=opts, REPORT=ms)
-                    time.sleep(5)
+                    #mlog[key] = {"Model" : model_choice[j], "F1-0" : "0.9", "F1-1" : "0.1"}
+                    mlog[key] = train(devices=device, opts=opts, LOGDIR=logdir)
+                    #time.sleep(5)
                     time_elapsed = datetime.now() - start_time
 
                     with open(os.path.join(opts.default_path, 'mlog.json'), "w") as f:
