@@ -107,7 +107,10 @@ def smail(subject: str = 'default subject', body: dict = {}):
     to_addr = ['sdimivy014@korea.ac.kr']
     from_addr = ['donotreply@korea.ac.kr']
 
-    ms = MailSend(subject=subject, msg=body, to_addr=to_addr, from_addr=from_addr)
+    ms = MailSend(subject=subject, msg=body,
+                    login_dir='/mnt/server5/sdi/login.json',
+                    ID='singkuserver' 
+                    to_addr=to_addr, from_addr=from_addr)
     ms()
 
 
