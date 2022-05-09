@@ -48,10 +48,6 @@ def build_log(opts, LOGDIR) -> SummaryWriter:
         logdir = os.path.join(LOGDIR, 'cache_param')
         os.mkdir(logdir)
         opts.save_ckpt = logdir
-    # Checkpoint option
-    #if opts.ckpt == None:
-    #    logdir = os.path.join(LOGDIR, 'ckpt')
-    #    os.mkdir(logdir)
 
     # Save Options description
     with open(os.path.join(LOGDIR, 'summary.txt'), 'w') as f:
@@ -148,10 +144,6 @@ def validate(opts, model, loader, device, metrics, epoch, criterion):
 
             metrics.update(target, preds)
             running_loss += loss.item() * images.size(0)
-
-        if opts.save_val_results:
-            sdir = os.path.join(opts.val_results_dir, 'epoch_{}'.format(epoch))
-            utils.save(sdir, model, loader, device, opts.is_rgb)
 
     epoch_loss = running_loss / len(loader.dataset)
     score = metrics.get_results()

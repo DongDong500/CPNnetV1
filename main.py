@@ -60,7 +60,7 @@ def get_argparser():
                         help="random seed (default: 1)")
     parser.add_argument("--gpus", type=str, default='6,7',
                         help="GPU IDs (default: 6,7)")
-    parser.add_argument("--total_itrs", type=int, default=10000,
+    parser.add_argument("--total_itrs", type=int, default=5000,
                         help="epoch number (default: 10k)")
     parser.add_argument("--lr", type=float, default=1e-1,
                         help="learning rate (default: 1e-1)")
