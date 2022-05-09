@@ -109,55 +109,6 @@ def get_dataset(opts):
     return train_dst, val_dst
 
 
-def save_val_image(opts, model, loader, device, epoch):
-
-    if not os.path.exists(os.path.join(opts.save_val_dir, 'epoch_{}'.format(epoch))):
-        try:
-            os.mkdir(os.path.join(opts.save_val_dir, 'epoch_{}'.format(epoch)))
-        except:
-            raise Exception
-    save_dir = os.path.join(os.path.join(opts.save_val_dir, 'epoch_{}'.format(epoch)))
-
-    if opts.is_rgb:
-        denorm = utils.Denormalize(mean=[0.485, 0.456, 0.406],
-                                    std=[0.229, 0.224, 0.225])
-    else:
-        denorm = utils.Denormalize(mean=[0.485], std=[0.229])
-
-    for i, (images, labels) in tqdm(enumerate(loader)):
-        images = images.to(device, dtype=torch.float32)
-        labels = labels.to(device, dtype=torch.long)
-        outputs = model(images)
-        probs = nn.Softmax(dim=1)(outputs)
-
-        preds = torch.max(probs, 1)[1].detach().cpu().numpy()
-        image = images.detach().cpu().numpy()
-        lbl = labels.detach().cpu().numpy()
-        #print('Image shape', image.shape) # (5, 1, 512, 512)
-        #print('lablel shape', lbl.shape) # (5, 512, 512)
-        
-        for j in range(images.shape[0]):
-            tar1 = (denorm(image[j]) * 255).transpose(1, 2, 0).astype(np.uint8)
-            img = (denorm(image[j]) * 255).transpose(1, 2, 0)
-            #print('denorm shape', tar1.shape) # (512, 512, 1)
-            if not opts.is_rgb:
-                tar1 = np.squeeze(tar1)
-                img = np.squeeze(img).astype(np.float32)
-            tar2 = (lbl[j] * 255).astype(np.uint8)
-            tar3 = (preds[j] * 255).astype(np.uint8)
-
-            tar4 = (255 - (lbl[j] * 160 + preds[j] * 95)).astype(np.uint8)
-            #tar5 = ( (img + 0.2 * ( (255 - (preds[j] * 255).astype(np.float32)) )) / 1.2 ).astype(np.uint8)
-
-            idx = str(i*images.shape[0] + j).zfill(3)
-            Image.fromarray(tar4).save(os.path.join( save_dir, '{}_mask.png'.format(idx) ))
-            if i*images.shape[0] + j < 5:
-                Image.fromarray(tar1).save(os.path.join( save_dir, '{}_image.png'.format(idx) ))
-            #Image.fromarray(tar5).save(os.path.join( save_dir, '{}_image.png'.format(idx) ))
-            
-            #Image.fromarray(tar3).save(os.path.join( save_dir, '{}_preds.png'.format(idx) ))
-
-
 def validate(opts, model, loader, device, metrics, epoch, criterion):
 
     metrics.reset()
@@ -189,11 +140,11 @@ def validate(opts, model, loader, device, metrics, epoch, criterion):
                 loss = criterion(outputs, labels)
 
             metrics.update(target, preds)
-            #loss = criterion(outputs, labels)
             running_loss += loss.item() * images.size(0)
 
         if opts.save_val_results:
-            save_val_image(opts, model, loader, device, epoch)
+            sdir = os.path.join(opts.save_val_dir, 'epoch_{}'.format(epoch))
+            utils.save(sdir, model, loader, device, opts.is_rgb)
 
     epoch_loss = running_loss / len(loader.dataset)
     score = metrics.get_results()

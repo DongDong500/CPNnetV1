@@ -8,6 +8,11 @@ from PIL import Image
 import utils
 
 def lpmap(N=2, lbl=True):
+    """
+    Args:
+        N: The number of classes
+        lbl: if True, it represents label (Blue) else predicted value (Red)
+    """
 
     cmap = np.zeros((N, 3), dtype='uint8')
     cmap[0] = np.array([0, 0, 0])
@@ -64,20 +69,26 @@ def save(path, model, loader, device, rgb):
                 Denorm(image[j]) shape: H x W x Channel
                     Ex) (512, 512, 1)
                 lmap(lbl[j]) shape: H x W x Channel
-                    Ex) (512, 512, 1)
+                    Ex) (512, 512, 3)
             '''
             tar1 = (denorm(image[j]) * 255).transpose(1, 2, 0).astype(np.uint8)
             tar2 = lmap[lbl[j]]
             tar3 = pmap[preds[j]]
             tar4 = tar2 + tar3
+            if not rgb:
+                # Expand to 3 channels
+                tar = np.zeros_like(tar4)
+                tar[:,:,0] = tar1
+                tar[:,:,1] = tar1
+                tar[:,:,2] = tar1
+                tar1 = tar
+            tar5 = (tar4*0.5 + tar1*0.5).astype(np.uint8)
 
             if not rgb:
                 tar1 = np.squeeze(tar1)
 
             idx = str(i*images.shape[0] + j).zfill(3)
-            Image.fromarray(tar4).save(os.path.join( path, '{}_mask.png'.format(idx) ))
-            if i*images.shape[0] + j < 5:
-                Image.fromarray(tar1).save(os.path.join( path, '{}_image.png'.format(idx) ))
+            Image.fromarray(tar5).save(os.path.join( path, '{}_overlay.png'.format(idx) ))
 
 if __name__ == "__main__":
     import sys
@@ -96,7 +107,7 @@ if __name__ == "__main__":
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print("Device: %s" % device)
 
-    isrgb = True
+    isrgb = False
     separable_conv = True
     model_name = 'deeplabv3plus_resnet101'
 
@@ -115,7 +126,7 @@ if __name__ == "__main__":
         et.ExtNormalize(mean=mean, std=std)
         ])
     val_dst = dt.CPN(root='/data1/sdi/datasets', datatype='CPN_six',
-                        image_set='val', transform=val_transform,
+                        image_set='train', transform=val_transform,
                         is_rgb=isrgb)
     val_loader = DataLoader(val_dst, batch_size=16, shuffle=True, num_workers=2, drop_last=True)
     print("[!] Val set: %d" % (len(val_dst)))
@@ -130,6 +141,6 @@ if __name__ == "__main__":
     #for param in model.state_dict():
     #    print(param, "\t", model.state_dict()[param].size())
 
-    model.load_state_dict(torch.load('/data1/sdi/MUnetPlus-result/deeplabv3plus_resnet101/Apr27_04-27-17_CPN_six/best_param/checkpoint.pt'))
+    model.load_state_dict(torch.load('/data1/sdi/MUnetPlus-result/deeplabv3plus_resnet101/Apr20_22-43-22_CPN_six/best_param/checkpoint.pt'))
 
-    save(path='/data1/sdi/MUnetPlus-result/test', model=model, loader=val_loader, device=device, rgb=isrgb)
+    save(path='/data1/sdi/MUnetPlus-result/test0509', model=model, loader=val_loader, device=device, rgb=isrgb)

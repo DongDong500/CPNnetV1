@@ -8,7 +8,7 @@ import time
 
 import torch
 from mail import MailSend
-from train import train
+from alphaTrain import train
 import network
 
 def get_argparser():
