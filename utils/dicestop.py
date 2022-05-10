@@ -4,9 +4,8 @@ import os
 
 class DiceStopping:
     """주어진 patience 이후로 validation loss가 개선되지 않으면 학습을 조기 중지"""
-    def __init__(self, patience=7, verbose=False, delta=0, 
-                    path='checkpoint.pt',
-                    save_model=False):
+    def __init__(self, patience:int = 7, verbose:bool = False, delta:int = 0, 
+                    path:str = 'checkpoint.pt', save_model:bool = False):
         """
         Args:
             patience (int): validation loss가 개선된 후 기다리는 기간
@@ -28,34 +27,44 @@ class DiceStopping:
         self.path = path
         self.save_model = save_model
 
-    def __call__(self, val_loss, model):
+    def __call__(self, val_loss, model, optim, scheduler, cur_itrs):
 
         score = -val_loss
 
         if self.best_score is None:
             self.best_score = score
-            self.save_checkpoint(val_loss, model)
+            self.save_checkpoint(val_loss, model, optim, scheduler, cur_itrs)
             return True
         elif score < self.best_score + self.delta:
             self.counter += 1
-            print(f'\nDiceEarlyStopping counter: {self.counter} out of {self.patience}')
+            print(f'DiceStopping counter: {self.counter} out of {self.patience}\n')
             if self.counter >= self.patience:
                 self.early_stop = True
             return False
         else:
             self.best_score = score
-            self.save_checkpoint(val_loss, model)
+            self.save_checkpoint(val_loss, model, optim, scheduler, cur_itrs)
             self.counter = 0
             return True
 
-    def save_checkpoint(self, val_loss, model):
+    def save_checkpoint(self, val_loss, model, optim, scheduler, cur_itrs):
         '''validation -F1 score 가 감소하면 모델을 저장한다.'''
         if self.verbose:
-            print(f'\nNegative Dice score decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).')
+            print(f'Negative Dice score decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).')
         if self.save_model:
-            print('Saving model ... \n {}'.format(self.path))
-            torch.save(model.state_dict(), os.path.join(self.path, 'dicecheckpoint.pt'))
+            print('Saving model ... \n {}\n'.format(self.path))
+            torch.save({
+                'model_state' : model.state_dict(),
+                'optimizer_state' : optim.state_dict(),
+                'scheduler_state' : scheduler.state_dict(),
+                'cur_itrs' : cur_itrs,
+            }, os.path.join(self.path, 'dicecheckpoint.pt'))
         else:
-            print('Saving Cache model ... \n {}'.format(self.path))
-            torch.save(model.state_dict(), os.path.join(self.path, 'dicecheckpoint.pt'))
+            print('Saving Cache model ... \n {}\n'.format(self.path))
+            torch.save({
+                'model_state' : model.state_dict(),
+                'optimizer_state' : optim.state_dict(),
+                'scheduler_state' : scheduler.state_dict(),
+                'cur_itrs' : cur_itrs,
+            }, os.path.join(self.path, 'dicecheckpoint.pt'))
         self.val_loss_min = val_loss

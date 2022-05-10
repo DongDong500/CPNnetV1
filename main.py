@@ -18,13 +18,11 @@ def get_argparser():
                         help="path to results")
     parser.add_argument("--current_time", type=str, default=None,
                         help="results images folder name (default: current time)")
-    
     # Tensorboard options
     parser.add_argument("--Tlog_dir", type=str, default=None,
                         help="path to tensorboard log")
     parser.add_argument("--save_log", action='store_true', default=False, 
                         help="save log to default path (default: False)")
-
     # Model options
     available_models = sorted(name for name in network.model.__dict__ if name.islower() and \
                               not (name.startswith("__") or name.startswith('_')) and callable(
@@ -37,7 +35,6 @@ def get_argparser():
                         help="apply separable conv to decoder and aspp (default: False)")
     parser.add_argument("--output_stride", type=int, default=16, choices=[8, 16, 32, 64],
                         help="output stride (default: 16)")
-
     # Dataset options
     parser.add_argument("--num_workers", type=int, default=4,
                         help="number of workers (default: 4)")
@@ -49,12 +46,10 @@ def get_argparser():
                         help="number of classes (default: 2)")
     parser.add_argument("--is_rgb", action='store_false', default=True,
                         help="choose True: RGB, False: grey (default: True)")
-
     # Augmentation options
     parser.add_argument("--resize", default=(496, 468))
     parser.add_argument("--crop_size", default=(512, 448))
     parser.add_argument("--scale_factor", type=float, default=5e-1)
-
     # Train options
     parser.add_argument("--random_seed", type=int, default=1,
                         help="random seed (default: 1)")
@@ -66,6 +61,8 @@ def get_argparser():
                         help="learning rate (default: 1e-1)")
     parser.add_argument("--loss_type", type=str, default='dice_loss',
                         help="criterion (default: dice loss)")
+    parser.add_argument("--optim", type=str, default='SGD',
+                        help="optimizer (default: SGD)")
     parser.add_argument("--lr_policy", type=str, default='step',
                         help="learning rate scheduler policy")
     parser.add_argument("--step_size", type=int, default=1000, 
@@ -76,13 +73,16 @@ def get_argparser():
                         help='momentum (default: 0.9)')
     parser.add_argument("--batch_size", type=int, default=16,
                         help='batch size (default: 16)')
-
+    # Early stop options
+    parser.add_argument("--patience", type=int, default=100,
+                        help="Number of epochs with no improvement after which training will be stopped (default: 100)")
+    parser.add_argument("--delta", type=float, default=0.001,
+                        help="Minimum change in the monitored quantity to qualify as an improvement (default: 0.001)")
     # Validate options
     parser.add_argument("--val_interval", type=int, default=1,
                         help="epoch interval for eval (default: 1)")
     parser.add_argument("--val_batch_size", type=int, default=4,
                         help='batch size for validate (default: 4)')
-
     # Outcome options
     parser.add_argument("--save_model", action='store_true', default=False,
                         help="save best model param to \"./best_param\" (default: False)")

@@ -1,4 +1,5 @@
 import argparse
+from tabnanny import check
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -205,10 +206,18 @@ def train(opts, devices, LOGDIR) -> dict:
     ''' (4) Set up optimizer
     '''
     if opts.model.startswith("deeplab"):
-        optimizer = torch.optim.SGD(params=[
-        {'params': model.backbone.parameters(), 'lr': 0.1 * opts.lr},
-        {'params': model.classifier.parameters(), 'lr': opts.lr},
-        ], lr=opts.lr, momentum=0.9, weight_decay=opts.weight_decay)
+        if opts.optim == "SGD":
+            optimizer = torch.optim.SGD(params=[
+            {'params': model.backbone.parameters(), 'lr': 0.1 * opts.lr},
+            {'params': model.classifier.parameters(), 'lr': opts.lr},
+            ], lr=opts.lr, momentum=0.9, weight_decay=opts.weight_decay)
+        elif opts.optim == "RMSprop":
+            optimizer = torch.optim.RMSprop(params=[
+            {'params': model.backbone.parameters(), 'lr': 0.1 * opts.lr},
+            {'params': model.classifier.parameters(), 'lr': opts.lr},
+            ], lr=opts.lr, momentum=0.9, weight_decay=opts.weight_decay)
+        else:
+            raise NotImplementedError
     else:
         optimizer = optim.RMSprop(model.parameters(), 
                                     lr=opts.lr, 
@@ -248,9 +257,9 @@ def train(opts, devices, LOGDIR) -> dict:
     ''' (6) Set up metrics
     '''
     metrics = StreamSegMetrics(opts.num_classes)
-    early_stopping = utils.EarlyStopping(patience=opts.total_itrs * 0.1, verbose=True, 
+    early_stopping = utils.EarlyStopping(patience=opts.patience, verbose=True, delta=opts.delta,
                                             path=opts.save_ckpt, save_model=opts.save_model)
-    dice_stopping = utils.DiceStopping(patience=opts.total_itrs * 0.1, verbose=True, 
+    dice_stopping = utils.DiceStopping(patience=opts.patience, verbose=True, delta=opts.delta,
                                             path=opts.save_ckpt, save_model=opts.save_model)
     best_score = 0.0
 
@@ -327,9 +336,9 @@ def train(opts, devices, LOGDIR) -> dict:
                 print(" Class IoU [0]: {:.2f} [1]: {:.2f}".format(val_score['Class IoU'][0], val_score['Class IoU'][1]))
                 print(" F1 [0]: {:.2f} [1]: {:.2f}".format(val_score['Class F1'][0], val_score['Class F1'][1]))
                 
-                if early_stopping(val_loss, model):
+                if early_stopping(val_loss, model, optimizer, scheduler, epoch):
                     B_epoch = epoch
-                if dice_stopping(-1 * val_score['Class F1'][1], model):
+                if dice_stopping(-1 * val_score['Class F1'][1], model, optimizer, scheduler, epoch):
                     B_val_score = val_score
 
                 if opts.save_log:
@@ -356,16 +365,17 @@ def train(opts, devices, LOGDIR) -> dict:
                 f.write("{} : {}\n".format(k, v))
 
         if opts.save_model:
-            model.load_state_dict(torch.load(os.path.join(opts.save_ckpt, 'dicecheckpoint.pt')))
+            checkpoint = torch.load(os.path.join(opts.save_ckpt, 'dicecheckpoint.pt'), map_location=torch.device('cpu'))
+            model.load_state_dict(checkpoint["model_state"])
             sdir = os.path.join(opts.val_results_dir, 'epoch_{}'.format(B_epoch))
             utils.save(sdir, model, val_loader, devices, opts.is_rgb)
-
-            if os.path.exists(os.path.join(opts.save_ckpt, 'dicecheckpoint.pt')):
-                os.remove(os.path.join(opts.save_ckpt, 'dicecheckpoint.pt'))
+            del checkpoint
         else:
-            model.load_state_dict(torch.load(os.path.join(opts.save_ckpt, 'dicecheckpoint.pt')))
+            checkpoint = torch.load(os.path.join(opts.save_ckpt, 'dicecheckpoint.pt'), map_location=torch.device('cpu'))
+            model.load_state_dict(checkpoint["model_state"])
             sdir = os.path.join(opts.val_results_dir, 'epoch_{}'.format(B_epoch))
             utils.save(sdir, model, val_loader, devices, opts.is_rgb)
+            del checkpoint
             if os.path.exists(os.path.join(opts.save_ckpt, 'checkpoint.pt')):
                 os.remove(os.path.join(opts.save_ckpt, 'checkpoint.pt'))
             if os.path.exists(os.path.join(opts.save_ckpt, 'dicecheckpoint.pt')):
