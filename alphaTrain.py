@@ -29,24 +29,24 @@ def build_log(opts, LOGDIR) -> SummaryWriter:
     if opts.save_log:
         logdir = os.path.join(LOGDIR, 'log')
         writer = SummaryWriter(log_dir=logdir)
+
     # Validate option
-    if opts.save_val_results or opts.save_last_results:
+    if opts.val_results:
         logdir = os.path.join(LOGDIR, 'val_results')
-        os.mkdir(logdir)
-        opts.save_val_dir = logdir
-    # Train option
-    if opts.save_train_results:
-        logdir = os.path.join(LOGDIR, 'train_results')
-        os.mkdir(logdir)
-        opts.save_train_dir = logdir
+        if not os.path.exists(logdir):
+            os.mkdir(logdir)
+        opts.val_results_dir = logdir
+
     # Save best model option
     if opts.save_model:
         logdir = os.path.join(LOGDIR, 'best_param')
-        os.mkdir(logdir)
+        if not os.path.exists(logdir):
+            os.mkdir(logdir)
         opts.save_ckpt = logdir
     else:
         logdir = os.path.join(LOGDIR, 'cache_param')
-        os.mkdir(logdir)
+        if not os.path.exists(logdir):
+            os.mkdir(logdir)
         opts.save_ckpt = logdir
 
     # Save Options description
@@ -350,7 +350,7 @@ def train(opts, devices, LOGDIR) -> dict:
         if opts.run_demo and epoch > 3:
             break
 
-    if opts.save_last_results:
+    if opts.val_results:
         with open(os.path.join(LOGDIR, 'summary.txt'), 'a') as f:
             for k, v in B_val_score.items():
                 f.write("{} : {}\n".format(k, v))
@@ -374,6 +374,6 @@ def train(opts, devices, LOGDIR) -> dict:
 
     return {
             'Model' : opts.model, 'Dataset' : opts.dataset,
-            'Policy' : opts.lr_policy, 'OS' : opts.output_stride, 'Epoch' : str(B_epoch),
+            'Policy' : opts.lr_policy, 'OS' : str(opts.output_stride), 'Epoch' : str(B_epoch),
             'F1 [0]' : "{:.2f}".format(B_val_score['Class F1'][0]), 'F1 [1]' : "{:.2f}".format(B_val_score['Class F1'][1])
             }

@@ -109,7 +109,7 @@ def smail(subject: str = 'default subject', body: dict = {}):
 
     ms = MailSend(subject=subject, msg=body,
                     login_dir='/mnt/server5/sdi/login.json',
-                    ID='singkuserver' 
+                    ID='singkuserver',
                     to_addr=to_addr, from_addr=from_addr)
     ms()
 
@@ -202,11 +202,13 @@ if __name__ == '__main__':
                     if os.path.exists(os.path.join(logdir, 'summary.txt')):
                         with open(os.path.join(logdir, 'summary.txt'), 'a') as f:
                             f.write('Time elapsed (h:m:s) {}'.format(time_elapsed))
-
+            J = 0
+            K = 0
             mlog['time elapsed'] = 'Time elapsed (h:m:s.ms) {}'.format(datetime.now() - mid_time)
             smail(subject="Short report-{}".format(loss_choice[i]), body=mlog)
             mlog = {}
             os.remove(os.path.join(opts.default_path, 'mlog.json'))
+
 
         os.remove(os.path.join(opts.default_path, 'log.json'))
 
