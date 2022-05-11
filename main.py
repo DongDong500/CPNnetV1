@@ -1,3 +1,4 @@
+from distutils import dep_util
 import os
 import json
 import argparse
@@ -95,6 +96,8 @@ def get_argparser():
     # Model checkpoint options
     parser.add_argument("--ckpt", default=None, type=str,
                         help="restore from checkpoint")
+    parser.add_argument("--continue_training", action='store_true', default=False,
+                        help="restore state from reserved params (defaults: false)")
 
     # Run Demo
     parser.add_argument("--run_demo", action='store_true', default=False)
@@ -167,14 +170,17 @@ if __name__ == '__main__':
                     opts.output_stride = output_stride_choice[k]
                     print("i: {}, j: {}, k: {}".format(i, j, k))
 
-                    if resume:
+                    if resume and not opts.run_demo:
                         resume = False
                         logdir = jog['current_working_dir']
                         opts.current_time = "resume"
-                        opts.ckpt = logdir
-                    else:
+                        opts.ckpt = os.path.join(logdir, 'best_param', 'checkpoint.pt')
+                    elif not resume and not opts.run_demo:
                         opts.current_time = datetime.now().strftime('%b%d_%H-%M-%S')
                         logdir = os.path.join(opts.Tlog_dir, opts.model, opts.current_time + '_' + opts.dataset)
+                    else:
+                        opts.current_time = datetime.now().strftime('%b%d_%H-%M-%S')
+                        logdir = os.path.join(opts.Tlog_dir, opts.model, opts.current_time + '_' + opts.dataset + '_demo')
 
                     # leave log
                     with open(os.path.join(opts.default_path, 'log.json'), "w") as f:
@@ -202,8 +208,9 @@ if __name__ == '__main__':
                     if os.path.exists(os.path.join(logdir, 'summary.txt')):
                         with open(os.path.join(logdir, 'summary.txt'), 'a') as f:
                             f.write('Time elapsed (h:m:s) {}'.format(time_elapsed))
+                K = 0
             J = 0
-            K = 0
+
             mlog['time elapsed'] = 'Time elapsed (h:m:s.ms) {}'.format(datetime.now() - mid_time)
             smail(subject="Short report-{}".format(loss_choice[i]), body=mlog)
             mlog = {}

@@ -1,5 +1,6 @@
 import argparse
 from tabnanny import check
+from more_itertools import map_except
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -212,6 +213,8 @@ def train(opts, devices, LOGDIR) -> dict:
             {'params': model.classifier.parameters(), 'lr': opts.lr},
             ], lr=opts.lr, momentum=0.9, weight_decay=opts.weight_decay)
         elif opts.optim == "RMSprop":
+            '''
+            '''
             optimizer = torch.optim.RMSprop(params=[
             {'params': model.backbone.parameters(), 'lr': 0.1 * opts.lr},
             {'params': model.classifier.parameters(), 'lr': opts.lr},
@@ -242,11 +245,13 @@ def train(opts, devices, LOGDIR) -> dict:
         if opts.continue_training:
             optimizer.load_state_dict(checkpoint["optimizer_state"])
             scheduler.load_state_dict(checkpoint["scheduler_state"])
-            cur_itrs = checkpoint["cur_itrs"]
-            best_score = checkpoint['best_score']
+            resume_epoch = checkpoint["cur_itrs"]
             print("Training state restored from %s" % opts.ckpt)
+        else:
+            resume_epoch = 0
         print("Model restored from %s" % opts.ckpt)
         del checkpoint  # free memory
+        torch.cuda.empty_cache()
     else:
         print("[!] Train from scratch...")
         resume_epoch = 0
@@ -357,6 +362,7 @@ def train(opts, devices, LOGDIR) -> dict:
             break
 
         if opts.run_demo and epoch > 3:
+            print("Run demo !!!")
             break
 
     if opts.val_results:
@@ -365,17 +371,21 @@ def train(opts, devices, LOGDIR) -> dict:
                 f.write("{} : {}\n".format(k, v))
 
         if opts.save_model:
-            checkpoint = torch.load(os.path.join(opts.save_ckpt, 'dicecheckpoint.pt'), map_location=torch.device('cpu'))
+            checkpoint = torch.load(os.path.join(opts.save_ckpt, 'dicecheckpoint.pt'), map_location=devices)
             model.load_state_dict(checkpoint["model_state"])
             sdir = os.path.join(opts.val_results_dir, 'epoch_{}'.format(B_epoch))
             utils.save(sdir, model, val_loader, devices, opts.is_rgb)
             del checkpoint
+            del model
+            torch.cuda.empty_cache()
         else:
-            checkpoint = torch.load(os.path.join(opts.save_ckpt, 'dicecheckpoint.pt'), map_location=torch.device('cpu'))
+            checkpoint = torch.load(os.path.join(opts.save_ckpt, 'dicecheckpoint.pt'), map_location=devices)
             model.load_state_dict(checkpoint["model_state"])
             sdir = os.path.join(opts.val_results_dir, 'epoch_{}'.format(B_epoch))
             utils.save(sdir, model, val_loader, devices, opts.is_rgb)
             del checkpoint
+            del model
+            torch.cuda.empty_cache()
             if os.path.exists(os.path.join(opts.save_ckpt, 'checkpoint.pt')):
                 os.remove(os.path.join(opts.save_ckpt, 'checkpoint.pt'))
             if os.path.exists(os.path.join(opts.save_ckpt, 'dicecheckpoint.pt')):
