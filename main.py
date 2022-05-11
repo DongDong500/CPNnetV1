@@ -175,6 +175,7 @@ if __name__ == '__main__':
                         logdir = jog['current_working_dir']
                         opts.current_time = "resume"
                         opts.ckpt = os.path.join(logdir, 'best_param', 'checkpoint.pt')
+                        resume = False
                     elif not resume and not opts.run_demo:
                         opts.current_time = datetime.now().strftime('%b%d_%H-%M-%S')
                         logdir = os.path.join(opts.Tlog_dir, opts.model, opts.current_time + '_' + opts.dataset)

@@ -237,10 +237,10 @@ def train(opts, devices, LOGDIR) -> dict:
     ''' (5) Resume model & scheduler
     '''
     if opts.ckpt is not None and os.path.isfile(opts.ckpt):
-        checkpoint = torch.load(opts.ckpt, map_location=torch.device('cpu'))
-        model.load_state_dict(checkpoint["model_state"])
         if torch.cuda.device_count() > 1:
             model = nn.DataParallel(model)
+        checkpoint = torch.load(opts.ckpt, map_location=torch.device('cpu'))
+        model.load_state_dict(checkpoint["model_state"])
         model.to(devices)
         if opts.continue_training:
             optimizer.load_state_dict(checkpoint["optimizer_state"])
