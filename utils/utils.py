@@ -1,6 +1,7 @@
 from torchvision.transforms.functional import normalize
 import torch.nn as nn
 import numpy as np
+import json
 import os 
 
 def cmap(N=256, normalized=False):
@@ -56,3 +57,72 @@ def fix_bn(model):
 def mkdir(path):
     if not os.path.exists(path):
         os.mkdir(path)
+
+
+def save_dict_to_json(d: dict, json_path: str):
+    """Saves dict of floats in json file
+
+    Args:
+        d: dict
+        json_path: (string) path to json file
+    """
+    if not os.path.exists(json_path):
+        with open(json_path, 'w') as f:
+            # We need to convert the values to float for json (it doesn't accept np.array, np.float, )
+            d = {k: v for k, v in d.items()}
+            json.dump(d, f, indent=4)
+    else:
+        with open(json_path, 'r') as f:
+            jdict = json.load(f)
+        for key, val in d.items():
+            jdict[key] = val
+        with open(json_path, 'w') as f:
+            json.dump(jdict, f, indent=4)
+
+def txt_to_json(txt_path: str):
+    """Convert 'summary.txt' to 'summary.json'
+    """
+
+    with open(txt_path, "r") as f:
+        s = [x.split(" : ") for x in f.readlines()]
+    
+    jdict = {}
+    for x in s:
+        if len(x) == 2:
+            jdict[x[0].strip()] = x[1].strip()
+        else:
+            jdict["Time elapsed"] = x
+
+    save_dict_to_json(jdict, os.path.join(os.path.dirname(txt_path), 'summary.json'))
+
+    return jdict
+
+class Params():
+    """Class that loads hyperparameters from a json file.
+
+    Example:
+    ```
+    params = Params(json_path)
+    print(params.learning_rate)
+    params.learning_rate = 0.5  # change the value of learning_rate in params
+    ```
+    """
+    def __init__(self, json_path):
+        with open(json_path) as f:
+            params = json.load(f)
+            self.__dict__.update(params)
+
+    def save(self, json_path):
+        with open(json_path, 'w') as f:
+            json.dump(self.__dict__, f, indent=4)
+            
+    def update(self, json_path):
+        """Loads parameters from json file"""
+        with open(json_path) as f:
+            params = json.load(f)
+            self.__dict__.update(params)
+
+    @property
+    def dict(self):
+        """Gives dict-like access to Params instance by `params.dict['learning_rate']"""
+        return self.__dict__

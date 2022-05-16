@@ -52,9 +52,10 @@ def build_log(opts, LOGDIR) -> SummaryWriter:
         opts.save_ckpt = logdir
 
     # Save Options description
-    with open(os.path.join(LOGDIR, 'summary.txt'), 'w') as f:
-        for k, v in vars(opts).items():
-            f.write("{} : {}\n".format(k, v))
+    jsummary = {}
+    for key, val in vars(opts).items():
+        jsummary[key] = val
+    utils.save_dict_to_json(jsummary, os.path.join(LOGDIR, 'summary.json'))
 
     return writer
 
@@ -342,8 +343,9 @@ def train(opts, devices, LOGDIR) -> dict:
                 print(" F1 [0]: {:.2f} [1]: {:.2f}".format(val_score['Class F1'][0], val_score['Class F1'][1]))
                 
                 if early_stopping(val_loss, model, optimizer, scheduler, epoch):
-                    B_epoch = epoch
+                    pass
                 if dice_stopping(-1 * val_score['Class F1'][1], model, optimizer, scheduler, epoch):
+                    B_epoch = epoch
                     B_val_score = val_score
 
                 if opts.save_log:
@@ -395,5 +397,5 @@ def train(opts, devices, LOGDIR) -> dict:
     return {
             'Model' : opts.model, 'Dataset' : opts.dataset,
             'Policy' : opts.lr_policy, 'OS' : str(opts.output_stride), 'Epoch' : str(B_epoch),
-            'F1 [0]' : "{:.2f}".format(B_val_score['Class F1'][0]), 'F1 [1]' : "{:.2f}".format(B_val_score['Class F1'][1])
+            'F1-[0]' : "{:.2f}".format(B_val_score['Class F1'][0]), 'F1-[1]' : "{:.2f}".format(B_val_score['Class F1'][1])
             }

@@ -1,221 +1,182 @@
-from distutils import dep_util
 import os
 import json
-import argparse
-import schedule
+import time
 import socket
 from datetime import datetime
-import time
 
 import torch
+
+import utils
 from mail import MailSend
 from alphaTrain import train
-import network
+from args import get_argparser
 
-def get_argparser():
-    parser = argparse.ArgumentParser()
 
-    parser.add_argument("--default_path", type=str, default="/data1/sdi/CPNnetV1-result/", 
-                        help="path to results")
-    parser.add_argument("--current_time", type=str, default=None,
-                        help="results images folder name (default: current time)")
-    # Tensorboard options
-    parser.add_argument("--Tlog_dir", type=str, default=None,
-                        help="path to tensorboard log")
-    parser.add_argument("--save_log", action='store_true', default=False, 
-                        help="save log to default path (default: False)")
-    # Model options
-    available_models = sorted(name for name in network.model.__dict__ if name.islower() and \
-                              not (name.startswith("__") or name.startswith('_')) and callable(
-                              network.model.__dict__[name])
-                             )
-    parser.add_argument("--model", type=str, default='unet_rgb', choices=available_models,
-                        help='model name (default: Unet RGB)')
-    # DeeplabV3+ options
-    parser.add_argument("--separable_conv", action='store_true', default=False,
-                        help="apply separable conv to decoder and aspp (default: False)")
-    parser.add_argument("--output_stride", type=int, default=16, choices=[8, 16, 32, 64],
-                        help="output stride (default: 16)")
-    # Dataset options
-    parser.add_argument("--num_workers", type=int, default=4,
-                        help="number of workers (default: 4)")
-    parser.add_argument("--data_root", type=str, default="/data1/sdi/datasets/",
-                        help="path to Dataset")
-    parser.add_argument("--dataset", type=str, default="CPN_six",
-                        help='Name of dataset (default: CPN_six)')
-    parser.add_argument("--num_classes", type=int, default=2,
-                        help="number of classes (default: 2)")
-    parser.add_argument("--is_rgb", action='store_false', default=True,
-                        help="choose True: RGB, False: grey (default: True)")
-    # Augmentation options
-    parser.add_argument("--resize", default=(496, 468))
-    parser.add_argument("--crop_size", default=(512, 448))
-    parser.add_argument("--scale_factor", type=float, default=5e-1)
-    # Train options
-    parser.add_argument("--random_seed", type=int, default=1,
-                        help="random seed (default: 1)")
-    parser.add_argument("--gpus", type=str, default='6,7',
-                        help="GPU IDs (default: 6,7)")
-    parser.add_argument("--total_itrs", type=int, default=5000,
-                        help="epoch number (default: 10k)")
-    parser.add_argument("--lr", type=float, default=1e-1,
-                        help="learning rate (default: 1e-1)")
-    parser.add_argument("--loss_type", type=str, default='dice_loss',
-                        help="criterion (default: dice loss)")
-    parser.add_argument("--optim", type=str, default='SGD',
-                        help="optimizer (default: SGD)")
-    parser.add_argument("--lr_policy", type=str, default='step',
-                        help="learning rate scheduler policy")
-    parser.add_argument("--step_size", type=int, default=1000, 
-                        help="step size (default: 1000)")
-    parser.add_argument("--weight_decay", type=float, default=5e-4,
-                        help='weight decay (default: 5e-4)')
-    parser.add_argument("--momentum", type=float, default=0.9,
-                        help='momentum (default: 0.9)')
-    parser.add_argument("--batch_size", type=int, default=16,
-                        help='batch size (default: 16)')
-    # Early stop options
-    parser.add_argument("--patience", type=int, default=100,
-                        help="Number of epochs with no improvement after which training will be stopped (default: 100)")
-    parser.add_argument("--delta", type=float, default=0.001,
-                        help="Minimum change in the monitored quantity to qualify as an improvement (default: 0.001)")
-    # Validate options
-    parser.add_argument("--val_interval", type=int, default=1,
-                        help="epoch interval for eval (default: 1)")
-    parser.add_argument("--val_batch_size", type=int, default=4,
-                        help='batch size for validate (default: 4)')
-    # Outcome options
-    parser.add_argument("--save_model", action='store_true', default=False,
-                        help="save best model param to \"./best_param\" (default: False)")
-    parser.add_argument("--save_ckpt", type=str, default=None,
-                        help="save best model param to \"./best_param\"")
-    parser.add_argument("--val_results", action='store_true', default=False,
-                        help='save validate segmentation results to \"./val_results\" (default: False)')
-    parser.add_argument("--val_results_dir", type=str, default=None,
-                        help="save segmentation results to \"./results\"")
-    # Model checkpoint options
-    parser.add_argument("--ckpt", default=None, type=str,
-                        help="restore from checkpoint")
-    parser.add_argument("--continue_training", action='store_true', default=False,
-                        help="restore state from reserved params (defaults: false)")
+LOGIN = {
+    3 : "/mnt/server5/sdi/login.json",
+    4 : "/mnt/server5/sdi/login.json",
+    5 : "/data1/sdi/login.json"
+}
+DEFAULT_DIR = {
+    3 : "/mnt/server5/sdi",
+    4 : "/mnt/server5/sdi",
+    5 : "/data1/sdi"
+}
+DATA_DIR = {
+    3 : "/mnt/server5/sdi/datasets",
+    4 : "/mnt/server5/sdi/datasets",
+    5 : "/data1/sdi/datasets"
+}
 
-    # Run Demo
-    parser.add_argument("--run_demo", action='store_true', default=False)
-
-    return parser
-
-def smail(subject: str = 'default subject', body: dict = {}):
+def smail(subject: str = 'default subject', body: dict = {}, login_dir: str = ''):
     ''' send short report mail (smtp) 
     '''
+    # Mail options
     to_addr = ['sdimivy014@korea.ac.kr']
-    from_addr = ['donotreply@korea.ac.kr']
+    from_addr = ['singkuserver@korea.ac.kr']
 
-    ms = MailSend(subject=subject, msg=body,
-                    login_dir='/mnt/server5/sdi/login.json',
-                    ID='singkuserver',
-                    to_addr=to_addr, from_addr=from_addr)
-    ms()
-
+    MailSend(subject=subject, msg=body, login_dir=login_dir, 
+                ID='singkuserver', to_addr=to_addr, from_addr=from_addr)()
 
 if __name__ == '__main__':
 
     opts = get_argparser().parse_args()
+
+    ''' (.) Get hostname of server
+    '''
+    if socket.gethostname() == "server3":
+        opts.cur_work_server = 3
+        opts.login_dir = LOGIN[3]
+        opts.default_path = os.path.join(DEFAULT_DIR[3], os.path.dirname(__file__).split('/')[-1]+'-result')
+        opts.data_root = DATA_DIR[3]
+    elif socket.gethostname() == "server4":
+        opts.cur_work_server = 4
+        opts.login_dir = LOGIN[4]
+        opts.default_path = os.path.join(DEFAULT_DIR[5], os.path.dirname(__file__).split('/')[-1]+'-result')
+        opts.data_root = DATA_DIR[4]
+    elif socket.gethostname() == "server5":
+        opts.cur_work_server = 5
+        opts.login_dir = LOGIN[5]
+        opts.default_path = os.path.join(DEFAULT_DIR[5], os.path.dirname(__file__).split('/')[-1]+'-result')
+        opts.data_root = DATA_DIR[5]
+    else:
+        raise NotImplementedError
+
+    ''' (.) Verify ID & PW of G-mail
+    '''
+    if not os.path.exists(opts.login_dir):
+        raise FileNotFoundError("login.json file not found (path: {})".format(opts.login_dir))
     
+    ''' (.) GPUs setting
+    '''
     os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
     os.environ['CUDA_VISIBLE_DEVICES'] = str(opts.gpus)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print("Device: %s" % device)
 
+    ''' (.) Resume from log.json
+    '''
     if os.path.exists(os.path.join(opts.default_path, 'log.json')):
         resume = True
-        with open(os.path.join(opts.default_path, 'log.json'), "r") as f:
-            jog = json.load(f)
+        jog = utils.Params(os.path.join(opts.default_path, 'log.json')).__dict__
     else:
         resume = False
         jog = {
+                'dataset_choice' : 0,
                 'loss_choice' : 0,
                 'model_choice' : 0,
                 'output_stride_choice' : 0,
                 'current_working_dir' : 0
                 }
+    H = jog['dataset_choice']
     I = jog['loss_choice']
     J = jog['model_choice']
     K = jog['output_stride_choice']
 
+    ''' (.) Load message log
+    '''
     if os.path.exists(os.path.join(opts.default_path, 'mlog.json')):
         with open(os.path.join(opts.default_path, 'mlog.json'), "r") as f:
             mlog = json.load(f)
     else:
         mlog = {}
 
+    ''' (.) Start train
+    '''
     total_time = datetime.now()
     try:
-        loss_choice = ['dice_loss', 'ap_entropy_dice_loss', 'ap_cross_entropy', 'focal_loss']
+        dataset_choice = ['Median', 'CPN_six']
+        loss_choice = ['ap_entropy_dice_loss', 'ap_cross_entropy', 'dice_loss']
         model_choice = ['deeplabv3plus_resnet101', 'deeplabv3plus_resnet50']
         output_stride_choice = [8, 16, 32, 64]
 
-        for i in range(len(loss_choice)):
-            if i < I:
-                continue  
-            mid_time = datetime.now()
-            for j in range(len(model_choice)):
-                if j < J:
+        for h in range(len(dataset_choice)):
+            if h < H:
+                continue
+            for i in range(len(loss_choice)):
+                if i < I:
                     continue
-                for k in range(len(output_stride_choice)):
-                    if k < K:
+                mid_time = datetime.now()
+                for j in range(len(model_choice)):
+                    if j < J:
                         continue
-                    opts.Tlog_dir = opts.default_path
-                    opts.loss_type = loss_choice[i]
-                    opts.model = model_choice[j]
-                    opts.output_stride = output_stride_choice[k]
-                    print("i: {}, j: {}, k: {}".format(i, j, k))
+                    for k in range(len(output_stride_choice)):
+                        if k < K:
+                            continue
+                        opts.Tlog_dir = opts.default_path
+                        opts.dataset = dataset_choice[h]
+                        opts.loss_type = loss_choice[i]
+                        opts.model = model_choice[j]
+                        opts.output_stride = output_stride_choice[k]
+                        print("i: {}, j: {}, k: {}".format(i, j, k))
 
-                    if resume and not opts.run_demo:
-                        resume = False
-                        logdir = jog['current_working_dir']
-                        opts.current_time = "resume"
-                        opts.ckpt = os.path.join(logdir, 'best_param', 'checkpoint.pt')
-                        resume = False
-                    elif not resume and not opts.run_demo:
-                        opts.current_time = datetime.now().strftime('%b%d_%H-%M-%S')
-                        logdir = os.path.join(opts.Tlog_dir, opts.model, opts.current_time + '_' + opts.dataset)
-                    else:
-                        opts.current_time = datetime.now().strftime('%b%d_%H-%M-%S')
-                        logdir = os.path.join(opts.Tlog_dir, opts.model, opts.current_time + '_' + opts.dataset + '_demo')
+                        if resume and not opts.run_demo:
+                            resume = False
+                            logdir = jog['current_working_dir']
+                            opts.current_time = "resume"
+                            opts.ckpt = os.path.join(logdir, 'best_param', 'checkpoint.pt')
+                            resume = False
+                        elif not resume and not opts.run_demo:
+                            opts.current_time = datetime.now().strftime('%b%d_%H-%M-%S')
+                            logdir = os.path.join(opts.Tlog_dir, opts.model, opts.current_time + '_' + opts.dataset)
+                        else:
+                            opts.current_time = datetime.now().strftime('%b%d_%H-%M-%S')
+                            logdir = os.path.join(opts.Tlog_dir, opts.model, opts.current_time + '_' + opts.dataset + '_demo')
 
-                    # leave log
-                    with open(os.path.join(opts.default_path, 'log.json'), "w") as f:
-                        jog['loss_choice'] = i
-                        jog['model_choice'] = j
-                        jog['output_stride_choice'] = k
-                        jog['current_working_dir'] = logdir
-                        json.dump(jog, f, indent=2)
+                        # leave log
+                        with open(os.path.join(opts.default_path, 'log.json'), "w") as f:
+                            jog['loss_choice'] = i
+                            jog['model_choice'] = j
+                            jog['output_stride_choice'] = k
+                            jog['current_working_dir'] = logdir
+                            json.dump(jog, f, indent=2)
 
-                    start_time = datetime.now()
-                    key = str(i*len(model_choice)*len(output_stride_choice) + j*len(output_stride_choice) + k)
-                    ''' 
-                        Ex) {"Model" : model_choice[j], "F1-0" : "0.9", "F1-1" : "0.1"}
-                    '''
-                    #mlog[key] = {"Model" : model_choice[j], "F1-0" : "0.9", "F1-1" : "0.1"}
-                    mlog[key] = train(devices=device, opts=opts, LOGDIR=logdir)
-                    #time.sleep(5)
-                    time_elapsed = datetime.now() - start_time
-
-                    with open(os.path.join(opts.default_path, 'mlog.json'), "w") as f:
-                        ''' JSON treats keys as strings
+                        start_time = datetime.now()
+                        key = str(i*len(model_choice)*len(output_stride_choice) + j*len(output_stride_choice) + k)
+                        ''' 
+                            Ex) {"Model" : model_choice[j], "F1-0" : "0.9", "F1-1" : "0.1"}
                         '''
-                        json.dump(mlog, f, indent=2)
-                    
-                    if os.path.exists(os.path.join(logdir, 'summary.txt')):
-                        with open(os.path.join(logdir, 'summary.txt'), 'a') as f:
-                            f.write('Time elapsed (h:m:s) {}'.format(time_elapsed))
-                K = 0
-            J = 0
+                        #mlog[key] = {"Model" : model_choice[j], "F1-0" : "0.9", "F1-1" : "0.1"}
+                        mlog[key] = train(devices=device, opts=opts, LOGDIR=logdir)
+                        #time.sleep(5)
+                        time_elapsed = datetime.now() - start_time
 
-            mlog['time elapsed'] = 'Time elapsed (h:m:s.ms) {}'.format(datetime.now() - mid_time)
-            smail(subject="Short report-{}".format(loss_choice[i]), body=mlog)
-            mlog = {}
-            os.remove(os.path.join(opts.default_path, 'mlog.json'))
+                        with open(os.path.join(opts.default_path, 'mlog.json'), "w") as f:
+                            ''' JSON treats keys as strings
+                            '''
+                            json.dump(mlog, f, indent=2)
+                        
+                        if os.path.exists(os.path.join(logdir, 'summary.json')):
+                            params = utils.Params(json_path=os.path.join(logdir, 'summary.json')).dict
+                            params["time_elpased"] = time_elapsed
+                            utils.save_dict_to_json(d=params, json_path=os.path.join(logdir, 'summary.json'))
+                    K = 0
+                J = 0
+
+                mlog['time elapsed'] = 'Time elapsed (h:m:s.ms) {}'.format(datetime.now() - mid_time)
+                smail(subject="Short report-{}".format(loss_choice[i]), body=mlog)
+                mlog = {}
+                os.remove(os.path.join(opts.default_path, 'mlog.json'))
 
 
         os.remove(os.path.join(opts.default_path, 'log.json'))
