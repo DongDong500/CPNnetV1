@@ -368,9 +368,11 @@ def train(opts, devices, LOGDIR) -> dict:
             break
 
     if opts.val_results:
-        with open(os.path.join(LOGDIR, 'summary.txt'), 'a') as f:
-            for k, v in B_val_score.items():
-                f.write("{} : {}\n".format(k, v))
+
+        params = utils.Params(json_path=os.path.join(LOGDIR, 'summary.json')).dict
+        for k, v in B_val_score.items():
+            params[k] = v
+        utils.save_dict_to_json(d=params, json_path=os.path.join(LOGDIR, 'summary.json'))
 
         if opts.save_model:
             checkpoint = torch.load(os.path.join(opts.save_ckpt, 'dicecheckpoint.pt'), map_location=devices)

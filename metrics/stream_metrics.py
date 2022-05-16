@@ -77,6 +77,7 @@ class StreamSegMetrics(_StreamMetrics):
         fwavacc = (freq[freq > 0] * iu[freq > 0]).sum()
         cls_iu = dict(zip(range(self.n_classes), iu))
         f1 = np.diag(hist) * 2 / (hist.sum(axis=1) + hist.sum(axis=0))
+        cls_f1 = dict(zip(range(self.n_classes), f1))
 
         return {
                 "Overall Acc": acc, 
@@ -84,7 +85,7 @@ class StreamSegMetrics(_StreamMetrics):
                 "FreqW Acc": fwavacc,
                 "Mean IoU": mean_iu,
                 "Class IoU": cls_iu,
-                "Class F1": f1
+                "Class F1": cls_f1
             }
         
     def reset(self):

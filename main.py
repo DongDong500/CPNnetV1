@@ -40,6 +40,11 @@ def smail(subject: str = 'default subject', body: dict = {}, login_dir: str = ''
 
 if __name__ == '__main__':
 
+    print('basename:    ', os.path.basename(__file__)) # main.py
+    print('dirname:     ', os.path.dirname(__file__)) # Empty in server3
+    print('abspath:     ', os.path.abspath(__file__)) # /data1/sdi/CPNKD/main.py
+    print('abs dirname: ', os.path.dirname(os.path.abspath(__file__))) # /data1/sdi/CPNKD
+
     opts = get_argparser().parse_args()
 
     ''' (.) Get hostname of server
@@ -47,17 +52,23 @@ if __name__ == '__main__':
     if socket.gethostname() == "server3":
         opts.cur_work_server = 3
         opts.login_dir = LOGIN[3]
-        opts.default_path = os.path.join(DEFAULT_DIR[3], os.path.dirname(__file__).split('/')[-1]+'-result')
+        opts.default_path = os.path.join(DEFAULT_DIR[3], 
+                                            os.path.dirname(os.path.abspath(__file__)).split('/')[-1] \
+                                                + '-result')
         opts.data_root = DATA_DIR[3]
     elif socket.gethostname() == "server4":
         opts.cur_work_server = 4
         opts.login_dir = LOGIN[4]
-        opts.default_path = os.path.join(DEFAULT_DIR[5], os.path.dirname(__file__).split('/')[-1]+'-result')
+        opts.default_path = os.path.join(DEFAULT_DIR[5], 
+                                            os.path.dirname(__file__).split('/')[-1] \
+                                                +'-result')
         opts.data_root = DATA_DIR[4]
     elif socket.gethostname() == "server5":
         opts.cur_work_server = 5
         opts.login_dir = LOGIN[5]
-        opts.default_path = os.path.join(DEFAULT_DIR[5], os.path.dirname(__file__).split('/')[-1]+'-result')
+        opts.default_path = os.path.join(DEFAULT_DIR[5],
+                                             os.path.dirname(__file__).split('/')[-1]\
+                                                 +'-result')
         opts.data_root = DATA_DIR[5]
     else:
         raise NotImplementedError
@@ -105,7 +116,7 @@ if __name__ == '__main__':
     '''
     total_time = datetime.now()
     try:
-        dataset_choice = ['Median', 'CPN_six']
+        dataset_choice = ['CPN_six', 'Median']
         loss_choice = ['ap_entropy_dice_loss', 'ap_cross_entropy', 'dice_loss']
         model_choice = ['deeplabv3plus_resnet101', 'deeplabv3plus_resnet50']
         output_stride_choice = [8, 16, 32, 64]
@@ -128,20 +139,21 @@ if __name__ == '__main__':
                         opts.loss_type = loss_choice[i]
                         opts.model = model_choice[j]
                         opts.output_stride = output_stride_choice[k]
-                        print("i: {}, j: {}, k: {}".format(i, j, k))
+                        print("h: {}, i: {}, j: {}, k: {}".format(h, i, j, k))
 
-                        if resume and not opts.run_demo:
+                        if resume:
                             resume = False
                             logdir = jog['current_working_dir']
                             opts.current_time = "resume"
                             opts.ckpt = os.path.join(logdir, 'best_param', 'checkpoint.pt')
-                            resume = False
-                        elif not resume and not opts.run_demo:
-                            opts.current_time = datetime.now().strftime('%b%d_%H-%M-%S')
-                            logdir = os.path.join(opts.Tlog_dir, opts.model, opts.current_time + '_' + opts.dataset)
                         else:
                             opts.current_time = datetime.now().strftime('%b%d_%H-%M-%S')
-                            logdir = os.path.join(opts.Tlog_dir, opts.model, opts.current_time + '_' + opts.dataset + '_demo')
+                            if opts.run_demo:
+                                logdir = os.path.join(opts.Tlog_dir, opts.model, 
+                                                        opts.current_time + '_' + opts.dataset + '_demo')
+                            else:
+                                logdir = os.path.join(opts.Tlog_dir, opts.model, 
+                                                        opts.current_time + '_' + opts.dataset)
 
                         # leave log
                         with open(os.path.join(opts.default_path, 'log.json'), "w") as f:
@@ -152,7 +164,9 @@ if __name__ == '__main__':
                             json.dump(jog, f, indent=2)
 
                         start_time = datetime.now()
-                        key = str(i*len(model_choice)*len(output_stride_choice) + j*len(output_stride_choice) + k)
+                        key = str(h*len(dataset_choice)*len(model_choice)*len(output_stride_choice) \
+                                    + i*len(model_choice)*len(output_stride_choice) \
+                                        + j*len(output_stride_choice) + k)
                         ''' 
                             Ex) {"Model" : model_choice[j], "F1-0" : "0.9", "F1-1" : "0.1"}
                         '''
@@ -168,13 +182,13 @@ if __name__ == '__main__':
                         
                         if os.path.exists(os.path.join(logdir, 'summary.json')):
                             params = utils.Params(json_path=os.path.join(logdir, 'summary.json')).dict
-                            params["time_elpased"] = time_elapsed
+                            params["time_elpased"] = str(time_elapsed)
                             utils.save_dict_to_json(d=params, json_path=os.path.join(logdir, 'summary.json'))
                     K = 0
                 J = 0
 
                 mlog['time elapsed'] = 'Time elapsed (h:m:s.ms) {}'.format(datetime.now() - mid_time)
-                smail(subject="Short report-{}".format(loss_choice[i]), body=mlog)
+                smail(subject="Short report-{}".format(loss_choice[i]), body=mlog, login_dir=opts.login_dir)
                 mlog = {}
                 os.remove(os.path.join(opts.default_path, 'mlog.json'))
 
